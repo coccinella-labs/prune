@@ -22,26 +22,34 @@ runs:
 
           const changedFiles = files
             .slice(0, 20)
-            .map(file => `- \`${file.filename}\` ${file.status} (+${file.additions}/-${file.deletions})`);
+            .map(f => `| \`${f.filename}\` | ${f.status} | ${f.additions} | ${f.deletions} |`);
           if (files.length > 20) {
-            changedFiles.push(`- ${files.length - 20} more files`);
+            changedFiles.push(`| ${files.length - 20} more files | ... | ... | ... |`);
           }
+          const rows = changedFiles.length
+            ? changedFiles
+            : ['| No file changes reported | ... | ... | ... |'];
 
           const newBody = [
-            '## Before',
+            '## Summary',
+            `${pr.title}`,
+            '',
+            '## Changes',
+            '| File | Status | Additions | Deletions |',
+            '| --- | --- | --- | --- |',
+            ...rows,
+            '',
+            '## Base',
             `\`${pr.base.ref}\` at \`${short(pr.base.sha)}\``,
             '',
-            '## After',
+            '## Head',
             `\`${pr.head.ref}\` at \`${short(pr.head.sha)}\``,
-            '',
-            '## Changed',
-            changedFiles.length ? changedFiles.join('\n') : '- No file changes reported',
             '',
             '## Compare',
             compareUrl,
             '',
             '---',
-            '<img src="https://raw.githubusercontent.com/libnudget/bot/main/assets/avatar.png" width="16" alt=""> `libnudget/prune@v1`',
+            '<img src="https://avatars.githubusercontent.com/u/283287531?s=16" width="16" alt=""> `coccinella-labs/prune@' + (github.action_ref || 'main') + '`',
           ].join('\n');
 
           await github.rest.pulls.update({
