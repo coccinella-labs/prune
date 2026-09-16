@@ -4,7 +4,7 @@
 
 # PRune
 
-[![Release](https://img.shields.io/github/v/release/libnudget/prune?logo=github&label=latest)](https://github.com/libnudget/prune/releases)
+[![Release](https://img.shields.io/github/v/release/coccinella-labs/prune?logo=github&label=latest)](https://github.com/coccinella-labs/prune/releases)
 
 Write PR descriptions from the actual PR diff.
 
@@ -32,28 +32,33 @@ jobs:
   normalize:
     runs-on: ubuntu-latest
     steps:
-      - uses: libnudget/prune@v1
+      - uses: coccinella-labs/prune@v1
 ```
 
 ## Example
 
 **Output:**
 ```
-## Before
+## Summary
+Example PR title
+
+## Changes
+| File | Status | Additions | Deletions |
+| --- | --- | --- | --- |
+| `action.yml` | modified | 12 | 4 |
+| `README.md` | modified | 8 | 20 |
+
+## Base
 `main` at `abc1234`
 
-## After
+## Head
 `fix/example` at `def5678`
-
-## Changed
-- `action.yml` modified (+12/-4)
-- `README.md` modified (+8/-20)
 
 ## Compare
 https://github.com/owner/repo/compare/abc1234...def5678
 
 ---
-<img src="https://raw.githubusercontent.com/libnudget/bot/main/assets/avatar.png" width="16" alt=""> `libnudget/prune@v1`
+<img src="https://avatars.githubusercontent.com/u/283287531?s=16" width="16" alt=""> `coccinella-labs/prune@v1`
 ```
 
 ## License
