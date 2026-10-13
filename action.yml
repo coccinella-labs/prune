@@ -1,6 +1,16 @@
 ---
 name: PRune
-description: Replace PR descriptions with before/after SHA and changed files
+description: Keep PR descriptions in sync with the repository PR template
+
+inputs:
+  overwrite:
+    description: Rewrite the description even when it already satisfies the PR template
+    required: false
+    default: "false"
+  template-paths:
+    description: Comma-separated template paths to look for, in order
+    required: false
+    default: ".github/pull_request_template.md,.github/PULL_REQUEST_TEMPLATE.md"
 
 runs:
   using: composite
@@ -12,6 +22,57 @@ runs:
           const pr = context.payload.pull_request;
           const short = sha => sha.slice(0, 7);
           const compareUrl = `${context.payload.repository.html_url}/compare/${pr.base.sha}...${pr.head.sha}`;
+          const overwrite = String(process.env.OVERWRITE || 'false').toLowerCase() === 'true';
+          const templatePaths = (process.env.TEMPLATE_PATHS || '')
+            .split(',')
+            .map((p) => p.trim())
+            .filter(Boolean);
+
+          const attribution =
+            '---\n<img src="https://avatars.githubusercontent.com/u/283287531?s=16" width="16" alt=""> ' +
+            '`coccinella-labs/prune@' + (github.action_ref || 'main') + '`';
+
+          // Discover the repository's PR template so a hand-written
+          // description is never destroyed just because it exists.
+          let template = null;
+          let templatePath = null;
+          for (const path of templatePaths) {
+            let res;
+            try {
+              res = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path,
+              });
+            } catch (err) {
+              // 404 just means this candidate path is not a template
+              continue;
+            }
+            if (res.data && res.data.content) {
+              template = Buffer.from(res.data.content, 'base64').toString('utf8');
+              templatePath = path;
+              break;
+            }
+          }
+
+          // Required sections are the template's own headings.
+          const headings =
+            template
+              ? (template.match(/^##\s+(.+?)\s*$/gm) || []).map((h) =>
+                  h.replace(/^##\s+/, '').trim(),
+                )
+              : [];
+          const headingPattern = (h) => new RegExp(`^#{1,6}\\s*${h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'im');
+          const satisfies = (body) =>
+            headings.length > 0 && headings.every((h) => headingPattern(h).test(body || ''));
+
+          const body = pr.body || '';
+          if (!overwrite && satisfies(body)) {
+            core.info(
+              `PR #${pr.number} already satisfies ${templatePath} (${headings.join(', ')}). Left unchanged.`,
+            );
+            return;
+          }
 
           const files = await github.paginate(github.rest.pulls.listFiles, {
             owner: context.repo.owner,
@@ -30,15 +91,13 @@ runs:
             ? changedFiles
             : ['| No file changes reported | ... | ... | ... |'];
 
-          const newBody = [
-            '## Summary',
-            `${pr.title}`,
-            '',
-            '## Changes',
+          const fileTable = [
             '| File | Status | Additions | Deletions |',
             '| --- | --- | --- | --- |',
             ...rows,
-            '',
+          ];
+
+          const footer = [
             '## Base',
             `\`${pr.base.ref}\` at \`${short(pr.base.sha)}\``,
             '',
@@ -48,9 +107,42 @@ runs:
             '## Compare',
             compareUrl,
             '',
-            '---',
-            '<img src="https://avatars.githubusercontent.com/u/283287531?s=16" width="16" alt=""> `coccinella-labs/prune@' + (github.action_ref || 'main') + '`',
-          ].join('\n');
+            attribution,
+          ];
+
+          // When the repo has a template, scaffold to its headings so the
+          // description matches what reviewers and the template expect.
+          let newBody;
+          if (headings.length) {
+            const placeholders = {
+              changes: '_Describe the change here._',
+              validation: '_List the exact commands or manual checks used._',
+              summary: pr.title,
+            };
+            const section = (heading) => {
+              const key = heading.toLowerCase();
+              if (key.includes('change')) return fileTable;
+              if (key.includes('valid') || key.includes('test')) {
+                return [placeholders.validation];
+              }
+              if (key.includes('summar')) return [placeholders.summary];
+              return [`_${heading}_`];
+            };
+            newBody = headings
+              .map((h) => ['## ' + h, '', ...section(h)].join('\n'))
+              .join('\n\n');
+            newBody += '\n\n' + footer.join('\n');
+          } else {
+            newBody = [
+              '## Summary',
+              `${pr.title}`,
+              '',
+              '## Changes',
+              ...fileTable,
+              '',
+              ...footer,
+            ].join('\n');
+          }
 
           await github.rest.pulls.update({
             owner: context.repo.owner,
@@ -59,4 +151,10 @@ runs:
             body: newBody,
           });
 
-          core.info('PR #' + pr.number + ' description updated');
+          core.info(
+            `PR #${pr.number} description written` +
+              (templatePath ? ` against ${templatePath}` : ' (no template found)'),
+          );
+        env:
+          OVERWRITE: ${{ inputs.overwrite }}
+          TEMPLATE_PATHS: ${{ inputs.template-paths }}

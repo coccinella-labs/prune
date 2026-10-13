@@ -1,0 +1,21 @@
+name: PRune
+description: Keep PR descriptions in sync with the repository PR template
+inputs:
+  overwrite:
+    description: Rewrite the description even when it already satisfies the PR template
+    required: false
+    default: 'false'
+  template-paths:
+    description: Comma-separated template paths to look for, in order
+    required: false
+    default: .github/pull_request_template.md,.github/PULL_REQUEST_TEMPLATE.md
+runs:
+  using: composite
+  steps:
+  - name: Write description
+    uses: actions/github-script@v7
+    with:
+      script: ACTIONS_STEP_RUNNER_PLACEHOLDER
+      env:
+        OVERWRITE: ${{ inputs.overwrite }}
+        TEMPLATE_PATHS: ${{ inputs.template-paths }}
